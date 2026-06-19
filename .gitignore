@@ -13,3 +13,9 @@ wheels/
 .env
 downloads/
 .pytest_cache/
+
+# Persistent browser profile (cached Cloudflare clearance)
+.cf-profile/
+
+# misc
+*scratch*

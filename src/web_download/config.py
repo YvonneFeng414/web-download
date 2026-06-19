@@ -24,17 +24,43 @@ class Settings(BaseSettings):
     # Where downloaded protocol PDFs are saved.
     downloads_dir: Path = Field(default=Path("downloads"))
 
-    # Number of leading PDF pages to extract for the protocol decision.
-    skim_pages: int = Field(default=3, ge=1)
+    # LLM model the browser-use agent drives (via OPENAI_API_KEY + BASE_URL).
+    # A smaller model is the other big cost/latency lever (set WD_AGENT_MODEL).
+    agent_model: str = Field(default="gpt-5.1")
 
-    # Minimum classifier confidence required to keep a PDF.
-    confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    # Caps on the agent's run.
+    agent_max_steps: int = Field(default=10, ge=1)
+    agent_max_failures: int = Field(default=2, ge=0)
 
-    # OpenAI model used for the protocol classification step.
-    classifier_model: str = Field(default="gpt-4o-mini")
+    # General task prompt template (formatted with the article {url}).
+    prompt_path: Path = Field(default=Path("prompt-template/task_prompt.txt"))
 
-    # OpenAI model used by the browser-use fallback agent.
-    agent_model: str = Field(default="gpt-4o")
+    # --- Efficiency knobs (defaults tuned for cheaper/faster runs) ---
+    # DOM-only by default (no per-step screenshot) — the biggest token/latency
+    # win. Set WD_AGENT_USE_VISION=true for a page that needs screenshots.
+    agent_use_vision: bool = Field(default=False)
+    # browser-use's fast path: less per-step reasoning.
+    agent_flash_mode: bool = Field(default=True)
+    # More actions per LLM call -> fewer calls.
+    agent_max_actions_per_step: int = Field(default=8, ge=1)
+    # Cap conversation history growth -> fewer tokens per step.
+    agent_max_history_items: int = Field(default=25, ge=1)
+    # Abandon a stuck step sooner (browser-use default is 180s).
+    agent_step_timeout: int = Field(default=90, ge=1)
+    # Let the browser grab PDF links directly instead of via agent steps.
+    auto_download_pdfs: bool = Field(default=True)
+    # Page-load pacing, in seconds (lower = faster steps).
+    wait_between_actions: float = Field(default=0.3, ge=0.0)
+    network_idle_wait: float = Field(default=1.0, ge=0.0)
+    min_page_load_wait: float = Field(default=0.25, ge=0.0)
+
+    # --- Post-download verification ---
+    # Confirm each downloaded PDF is actually a protocol/SAP; delete the rest.
+    verify_downloads: bool = Field(default=True)
+    # Model used for the content check (a smaller model is ideal/cheap here).
+    verify_model: str = Field(default="gpt-5.1")
+    # First pages of the PDF to read for the check.
+    verify_pages: int = Field(default=3, ge=1)
 
     # Run the browser without a visible window. Defaults to False: publisher
     # anti-bot challenges (e.g. JAMA's Cloudflare) only clear in headed mode.
@@ -42,6 +68,10 @@ class Settings(BaseSettings):
 
     # Per-request navigation/network timeout in milliseconds.
     timeout_ms: int = Field(default=30_000, ge=1_000)
+
+    # Persistent browser profile dir. Caches the Cloudflare clearance cookie
+    # (cf_clearance) and fingerprint across runs so the challenge is solved once.
+    user_data_dir: Path = Field(default=Path(".cf-profile"))
 
     def ensure_dirs(self) -> None:
         self.downloads_dir.mkdir(parents=True, exist_ok=True)

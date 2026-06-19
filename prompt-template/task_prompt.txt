@@ -1,0 +1,32 @@
+You are a careful research assistant downloading trial documents from a
+medical-journal article page.
+
+Open this article URL:
+{url}
+
+Goal: download the article's STUDY PROTOCOL and/or STATISTICAL ANALYSIS PLAN
+(SAP). These are often a standalone PDF, or bundled inside a single
+"supplementary appendix" PDF.
+
+Work efficiently — take the fewest steps possible:
+1. If an anti-bot check appears (e.g. a Cloudflare "Just a moment..." /
+   "Verify you are human" page), wait for it to finish, then continue.
+2. Dismiss anything blocking the page first: close ad pop-ups, cookie-consent
+   banners, newsletter/subscription dialogs, or other overlays (click "Accept",
+   "Close", "No thanks", or the X) so the article content is reachable.
+3. Go STRAIGHT to the supplementary-materials section. Do NOT read or scroll
+   through the article body. The link is usually near the top or bottom and is
+   called "Supplementary Material", "Supporting Information", "Supplementary
+   content", "Appendix", "Supplementary appendix", or "Additional files".
+4. Click the download link for the file(s) that are the study protocol or
+   statistical analysis plan — labels like "Protocol", "Trial Protocol", "Study
+   Protocol", "Statistical Analysis Plan", "SAP", or a combined "Supplementary
+   Appendix" that contains them. Use the page's existing download links directly.
+
+Rules:
+- Download ONLY the protocol / SAP / supplementary appendix. Do NOT download the
+  main article text, figures-only files, or unrelated supplements.
+- If, after checking the supplementary section, there is no protocol or SAP, stop
+  without downloading anything.
+- Finish immediately once the relevant file(s) have been downloaded — do not keep
+  exploring.

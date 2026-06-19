@@ -1,44 +1,34 @@
 # web-download
 
-Pipeline that, given a medical-journal article URL, finds the downloadable
-supplementary PDFs, skims only their first few pages to decide whether each is a
-**study protocol** (or statistical analysis plan), and downloads the ones that
-are.
+Pipeline that, given a medical-journal article (URL, title/citation, or a batch
+`papers.json`), runs a **browser-use agent** to find the article's supplementary
+materials and download the **study protocol** / **statistical analysis plan**.
 
 ## Architecture
 
-- **patchright (stealth Playwright)** — deterministic browser engine: navigation,
-  locating supplement links, cookie-aware file fetches. Plain Playwright cannot
-  clear publisher anti-bot challenges (e.g. JAMA's Cloudflare "Just a
-  moment..."); patchright in **headed** mode does. Hence `WD_HEADLESS` defaults
-  to `false`.
-- **browser-use** — an LLM-agent layer built *on top of* Playwright. Used only as
-  a **fallback** to locate supplement links when no publisher adapter matches.
-- **PyMuPDF + OpenAI GPT** — the "is it a protocol?" judgment is about PDF
-  *content*, which the browsers don't read. We download the file, extract the
-  first few pages, and classify them with GPT.
+- **browser-use agent** — a single LLM-driven browser agent. Given the article
+  URL and a general task prompt ([prompt-template/task_prompt.txt](prompt-template/task_prompt.txt)),
+  it navigates the page, finds the supplementary-material section, and downloads
+  the protocol/SAP itself. Runs **headed** by default (`WD_HEADLESS=false`) so
+  publisher anti-bot challenges (e.g. JAMA's Cloudflare) can clear; a persistent
+  profile (`WD_USER_DATA_DIR`) caches that clearance across runs.
+- **resolution** — for `--title`/`--papers`, the DOI is extracted from the
+  citation and resolved to the article URL via Google Custom Search
+  (`GOOGLE_API_KEY` + `CX_ID`).
 
 ```
-article URL
-   │  Playwright: open page
-   ▼
-publisher adapter (JAMA / NEJM / Lancet / BMJ)  ──none?──▶ browser-use agent fallback
-   │  supplement candidates (label + url)
-   ▼
-PyMuPDF: download PDF, extract first N pages
-   ▼
-OpenAI GPT: is_protocol? doc_type? confidence?
-   ▼
-save PDFs judged protocol above the confidence threshold
+title / citation ──(DOI → Google)──▶ article URL ──▶ browser-use agent
+                                                         │  reads the page,
+                                                         ▼  downloads protocol/SAP
+                                         downloads/<doi>/…pdf  +  bookkeeping.csv
 ```
 
 ## Setup
 
 ```bash
 uv sync --extra dev
-uv run patchright install chromium   # stealth driver's browser
-uv run playwright install chromium   # used by the browser-use fallback / tests
-cp .env.example .env                  # add your OPENAI_API_KEY
+uv run playwright install chromium   # browser the agent drives
+cp .env.example .env                  # add OPENAI_API_KEY (+ BASE_URL), GOOGLE_API_KEY, CX_ID
 ```
 
 ## Usage
@@ -48,6 +38,24 @@ uv run python main.py https://jamanetwork.com/journals/jama/fullarticle/2466145 
 # or, after install:
 uv run web-download <url> --out downloads --skim-pages 3 --threshold 0.6
 ```
+
+### Starting from a title instead of a URL
+
+When you only have a citation/title, the resolver extracts its DOI and uses
+Google Custom Search (set `GOOGLE_API_KEY` + `CX_ID` in `.env`) to find the
+article URL, then runs the normal download flow. Titles with no DOI are skipped.
+
+```bash
+# single title
+uv run web-download --title "…citation… doi: 10.1016/j.jpeds.2020.02.024" -v
+
+# batch over the papers.json produced by `search-papers`
+uv run web-download --papers downloads/papers.json --limit 3 -v
+```
+
+Downloads are grouped per article into a DOI-named subfolder under `--out`
+(e.g. `downloads/10.1016_j.jpeds.2020.02.024/…pdf`); when no DOI is available the
+article id is used instead.
 
 ## Tests
 
