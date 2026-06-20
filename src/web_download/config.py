@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # Model used for the content check (a smaller model is ideal/cheap here).
     verify_model: str = Field(default="gpt-5.1")
     # First pages of the PDF to read for the check.
-    verify_pages: int = Field(default=3, ge=1)
+    verify_pages: int = Field(default=10, ge=1)
 
     # Run the browser without a visible window. Defaults to False: publisher
     # anti-bot challenges (e.g. JAMA's Cloudflare) only clear in headed mode.

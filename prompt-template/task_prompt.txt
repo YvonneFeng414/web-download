@@ -8,6 +8,15 @@ Goal: download the article's STUDY PROTOCOL and/or STATISTICAL ANALYSIS PLAN
 (SAP). These are often a standalone PDF, or bundled inside a single
 "supplementary appendix" PDF.
 
+Download priority — pick by this order of preference:
+1. The STUDY PROTOCOL (highest priority).
+2. The STATISTICAL ANALYSIS PLAN (SAP).
+3. Only if neither a clearly-labeled protocol nor SAP exists: a single file whose
+   content clearly looks like a protocol or SAP (e.g. a "Supplementary Appendix"
+   that contains the trial design / planned analyses).
+If both a protocol and a SAP are available, download both. If NONE of the above
+exist, download NOTHING.
+
 Work efficiently — take the fewest steps possible:
 1. If an anti-bot check appears (e.g. a Cloudflare "Just a moment..." /
    "Verify you are human" page), wait for it to finish, then continue.
@@ -18,15 +27,16 @@ Work efficiently — take the fewest steps possible:
    through the article body. The link is usually near the top or bottom and is
    called "Supplementary Material", "Supporting Information", "Supplementary
    content", "Appendix", "Supplementary appendix", or "Additional files".
-4. Click the download link for the file(s) that are the study protocol or
-   statistical analysis plan — labels like "Protocol", "Trial Protocol", "Study
-   Protocol", "Statistical Analysis Plan", "SAP", or a combined "Supplementary
-   Appendix" that contains them. Use the page's existing download links directly.
+4. Following the download priority above, click the download link for the
+   matching file(s) — labels like "Protocol", "Trial Protocol", "Study Protocol",
+   "Statistical Analysis Plan", "SAP", or a combined "Supplementary Appendix" that
+   contains them. Use the page's existing download links directly.
 
 Rules:
 - Download ONLY the protocol / SAP / supplementary appendix. Do NOT download the
   main article text, figures-only files, or unrelated supplements.
-- If, after checking the supplementary section, there is no protocol or SAP, stop
-  without downloading anything.
+- Respect the download priority (protocol > SAP > a file that clearly looks like
+  a protocol/SAP). If none of these exist after checking the supplementary
+  section, stop without downloading anything.
 - Finish immediately once the relevant file(s) have been downloaded — do not keep
   exploring.
