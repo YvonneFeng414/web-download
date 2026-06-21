@@ -9,7 +9,7 @@ def test_efficiency_defaults():
     s = Settings()
     assert s.agent_use_vision is False
     assert s.agent_flash_mode is True
-    assert s.auto_download_pdfs is True
+    assert s.auto_download_pdfs is False
     assert s.agent_max_actions_per_step == 8
     assert s.agent_step_timeout == 90
 
@@ -60,6 +60,6 @@ async def test_download_article_forwards_efficiency_knobs(tmp_path, monkeypatch)
     assert captured["agent"]["flash_mode"] is True
     assert captured["agent"]["max_actions_per_step"] == 8
     assert captured["agent"]["step_timeout"] == 90
-    assert captured["browser"]["auto_download_pdfs"] is True
+    assert captured["browser"]["auto_download_pdfs"] is False
     assert captured["browser"]["wait_between_actions"] == 0.3
     assert captured["max_steps"] == settings.agent_max_steps

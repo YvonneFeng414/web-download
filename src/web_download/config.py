@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # LLM model the browser-use agent drives (via OPENAI_API_KEY + BASE_URL).
     # A smaller model is the other big cost/latency lever (set WD_AGENT_MODEL).
-    agent_model: str = Field(default="gpt-5.1")
+    agent_model: str = Field(default="gpt-5.2")
 
     # Caps on the agent's run.
     agent_max_steps: int = Field(default=10, ge=1)
@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     # --- Efficiency knobs (defaults tuned for cheaper/faster runs) ---
     # DOM-only by default (no per-step screenshot) — the biggest token/latency
     # win. Set WD_AGENT_USE_VISION=true for a page that needs screenshots.
-    agent_use_vision: bool = Field(default=False)
+    agent_use_vision: bool = Field(default=True)
     # browser-use's fast path: less per-step reasoning.
     agent_flash_mode: bool = Field(default=True)
     # More actions per LLM call -> fewer calls.
@@ -47,8 +47,10 @@ class Settings(BaseSettings):
     agent_max_history_items: int = Field(default=25, ge=1)
     # Abandon a stuck step sooner (browser-use default is 180s).
     agent_step_timeout: int = Field(default=90, ge=1)
-    # Let the browser grab PDF links directly instead of via agent steps.
-    auto_download_pdfs: bool = Field(default=True)
+    # Off so the agent's explicit download is the only save (browser-use tracks
+    # it), avoiding a parallel auto-save that creates "name (1).pdf" duplicates.
+    # Set WD_AUTO_DOWNLOAD_PDFS=true for a rare viewer-only-PDF site.
+    auto_download_pdfs: bool = Field(default=False)
     # Page-load pacing, in seconds (lower = faster steps).
     wait_between_actions: float = Field(default=0.3, ge=0.0)
     network_idle_wait: float = Field(default=1.0, ge=0.0)
@@ -58,9 +60,12 @@ class Settings(BaseSettings):
     # Confirm each downloaded PDF is actually a protocol/SAP; delete the rest.
     verify_downloads: bool = Field(default=True)
     # Model used for the content check (a smaller model is ideal/cheap here).
-    verify_model: str = Field(default="gpt-5.1")
+    verify_model: str = Field(default="gpt-5.2")
     # First pages of the PDF to read for the check.
     verify_pages: int = Field(default=10, ge=1)
+    # Min classifier confidence-in-a-negative needed to DELETE a file (when the
+    # document has no explicit protocol/SAP marker). Higher = more conservative.
+    verify_reject_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
 
     # Run the browser without a visible window. Defaults to False: publisher
     # anti-bot challenges (e.g. JAMA's Cloudflare) only clear in headed mode.

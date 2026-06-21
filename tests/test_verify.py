@@ -4,9 +4,10 @@ from web_download import verify
 from web_download.config import Settings
 from web_download.verify import (
     ProtocolCheck,
+    decide,
     extract_first_pages_text,
+    has_protocol_marker,
     verify_and_filter,
-    verify_pdf,
 )
 
 
@@ -16,6 +17,12 @@ def _make_pdf(path, text):
     page.insert_text((72, 72), text)
     doc.save(str(path))
     doc.close()
+
+
+def _check(is_protocol, confidence, doc_type="x", reason="r"):
+    return ProtocolCheck(
+        is_protocol=is_protocol, doc_type=doc_type, confidence=confidence, reason=reason
+    )
 
 
 def test_extract_first_pages_text(tmp_path):
@@ -30,63 +37,63 @@ def test_extract_non_pdf_returns_empty(tmp_path):
     assert extract_first_pages_text(junk, 3) == ""
 
 
-class _FakeParse:
-    def __init__(self, decision):
-        self._decision = decision
-        self.called = False
-
-    async def parse(self, **kwargs):
-        self.called = True
-        from types import SimpleNamespace
-
-        msg = SimpleNamespace(parsed=self._decision)
-        return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
+def test_has_protocol_marker():
+    assert has_protocol_marker("STUDY PROTOCOL\nVersion 3.0\n...")
+    assert has_protocol_marker("Supplement 2.\nStatistical Analysis Plan (SAP)")
+    # bare "protocol" deep in body text is not a marker
+    assert not has_protocol_marker("eFigure 1. Outcomes by per-protocol analysis set")
+    assert not has_protocol_marker("Supplementary tables and figures")
 
 
-class _FakeClient:
-    def __init__(self, decision):
-        self._parser = _FakeParse(decision)
-        from types import SimpleNamespace
-
-        self.chat = SimpleNamespace(completions=self._parser)
+def test_decide_marker_overrides_negative():
+    # explicit marker -> keep even if classifier is a confident negative
+    keep, reason = decide(_check(False, 0.95), has_marker=True, reject_threshold=0.7)
+    assert keep is True and "marker" in reason
 
 
-async def test_verify_pdf_maps_decision(tmp_path):
-    pdf = tmp_path / "p.pdf"
-    _make_pdf(pdf, "Statistical Analysis Plan ...")
-    decision = ProtocolCheck(is_protocol=True, doc_type="SAP", reason="planned analyses")
-    out = await verify_pdf(pdf, model="m", client=_FakeClient(decision), max_pages=3)
-    assert out.is_protocol is True and out.doc_type == "SAP"
+def test_decide_classifier_positive_kept():
+    keep, _ = decide(_check(True, 0.4), has_marker=False, reject_threshold=0.7)
+    assert keep is True
 
 
-async def test_verify_pdf_empty_text_skips_llm(tmp_path):
-    junk = tmp_path / "x.pdf"
+def test_decide_confident_negative_rejected():
+    keep, reason = decide(_check(False, 0.9), has_marker=False, reject_threshold=0.7)
+    assert keep is False and "rejected" in reason
+
+
+def test_decide_low_confidence_negative_kept():
+    # "low confidence we should reject it" -> keep
+    keep, reason = decide(_check(False, 0.3), has_marker=False, reject_threshold=0.7)
+    assert keep is True and "low-confidence" in reason
+
+
+async def test_verify_and_filter_keeps_marked_file_despite_llm_no(tmp_path, monkeypatch):
+    marked = tmp_path / "protocol.pdf"
+    unrelated = tmp_path / "figures.pdf"
+    _make_pdf(marked, "Study Protocol\nFull trial design follows")
+    _make_pdf(unrelated, "eFigures and eTables only")
+
+    async def fake_classify(name, text, **kwargs):
+        # LLM confidently says NOT a protocol for both
+        return _check(False, 0.95)
+
+    monkeypatch.setattr(verify, "classify_text", fake_classify)
+
+    kept, rejected = await verify_and_filter([str(marked), str(unrelated)], Settings())
+
+    # marked file survives (fact overrides), unrelated is deleted
+    assert str(marked) in kept and marked.exists()
+    assert [p for p, _ in rejected] == [str(unrelated)]
+    assert not unrelated.exists()
+
+
+async def test_verify_and_filter_keeps_no_text_pdf(tmp_path, monkeypatch):
+    junk = tmp_path / "scan.pdf"
     junk.write_bytes(b"not a pdf")
-    client = _FakeClient(ProtocolCheck(is_protocol=True, doc_type="x", reason="y"))
-    out = await verify_pdf(junk, model="m", client=client, max_pages=3)
-    assert out.is_protocol is False
-    assert client._parser.called is False  # no LLM call when there's no text
 
+    async def boom(*a, **k):
+        raise AssertionError("classifier must not run on no-text files")
 
-async def test_verify_and_filter_deletes_non_protocol(tmp_path, monkeypatch):
-    keep = tmp_path / "protocol.pdf"
-    drop = tmp_path / "figures.pdf"
-    _make_pdf(keep, "Study Protocol")
-    _make_pdf(drop, "eFigures")
-    docx = tmp_path / "appendix.docx"
-    docx.write_bytes(b"PK\x03\x04")  # non-PDF kept untouched
-
-    async def fake_verify_pdf(path, **kwargs):
-        is_p = "protocol" in path.name
-        return ProtocolCheck(is_protocol=is_p, doc_type="x", reason="r")
-
-    monkeypatch.setattr(verify, "verify_pdf", fake_verify_pdf)
-
-    kept, rejected = await verify_and_filter(
-        [str(keep), str(drop), str(docx)], Settings()
-    )
-
-    assert str(keep) in kept and str(docx) in kept
-    assert [p for p, _ in rejected] == [str(drop)]
-    assert keep.exists() and docx.exists()
-    assert not drop.exists()  # deleted
+    monkeypatch.setattr(verify, "classify_text", boom)
+    kept, rejected = await verify_and_filter([str(junk)], Settings())
+    assert kept == [str(junk)] and rejected == []

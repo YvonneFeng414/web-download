@@ -1,26 +1,46 @@
 """Verify a downloaded file is actually a study protocol / SAP.
 
 The browser-use agent picks what it *thinks* is the protocol; this re-reads the
-file's content and asks an LLM to confirm. Files that fail are deleted, so only
-genuine protocols/SAPs remain on disk.
+file's content and decides whether to keep it. The decision is deliberately
+conservative — it combines two signals:
+
+1. a **fact**: does the document plainly identify itself as a protocol/SAP
+   (an explicit cover/heading marker)?
+2. the **LLM classifier**: ``is_protocol`` plus a ``confidence`` in that verdict.
+
+A file is deleted ONLY when there is no marker AND the classifier confidently says
+it is not a protocol. Everything else is kept.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import os
+import re
 from pathlib import Path
 
 import fitz  # PyMuPDF
 from openai import AsyncOpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from web_download.config import Settings
 
 log = logging.getLogger("web_download")
 
 _MAX_CHARS = 6_000
+
+# How much of the document start counts as its "cover" for the fact check.
+_COVER_CHARS = 1_500
+
+# Strong, self-identifying phrases. Bare "protocol" is excluded on purpose to
+# avoid false positives (e.g. "per-protocol analysis" in a results appendix).
+_MARKER_PHRASES = (
+    "study protocol",
+    "trial protocol",
+    "clinical study protocol",
+    "clinical trial protocol",
+    "statistical analysis plan",
+)
 
 _SYSTEM = (
     "You verify whether a downloaded supplementary file from a medical-journal "
@@ -29,13 +49,16 @@ _SYSTEM = (
     "the article text, etc.). A study protocol describes trial design, objectives, "
     "eligibility, interventions, endpoints, and procedures; an SAP describes the "
     "planned statistical analyses. Decide from the provided text. Set "
-    "is_protocol=true ONLY for a study protocol or statistical analysis plan."
+    "is_protocol=true ONLY for a study protocol or statistical analysis plan, and "
+    "set confidence to your calibrated confidence (0..1) IN THAT is_protocol "
+    "verdict."
 )
 
 
 class ProtocolCheck(BaseModel):
     is_protocol: bool
     doc_type: str
+    confidence: float = Field(ge=0.0, le=1.0)
     reason: str
 
 
@@ -52,6 +75,32 @@ def extract_first_pages_text(path: Path, max_pages: int) -> str:
     return "\n".join(parts).strip()
 
 
+def has_protocol_marker(text: str) -> bool:
+    """True if the document's cover region explicitly names itself a protocol/SAP."""
+    cover = re.sub(r"\s+", " ", text[:_COVER_CHARS]).lower()
+    return any(phrase in cover for phrase in _MARKER_PHRASES)
+
+
+def decide(
+    check: ProtocolCheck, has_marker: bool, reject_threshold: float
+) -> tuple[bool, str]:
+    """Combine the fact + classifier into a (keep, reason) decision.
+
+    Reject only when there is no explicit marker AND the classifier says
+    not-protocol AND it is confident (>= ``reject_threshold``).
+    """
+    if has_marker:
+        return True, "kept: explicit protocol/SAP marker in document"
+    if check.is_protocol:
+        return True, f"kept: classifier {check.doc_type} (conf {check.confidence:.2f})"
+    if check.confidence < reject_threshold:
+        return True, (
+            f"kept: low-confidence negative (conf {check.confidence:.2f} < "
+            f"{reject_threshold:.2f}) — {check.reason}"
+        )
+    return False, f"rejected (conf {check.confidence:.2f}): {check.reason}"
+
+
 def _user_prompt(name: str, text: str) -> str:
     return (
         f"File name: {name!r}\n\n"
@@ -60,19 +109,13 @@ def _user_prompt(name: str, text: str) -> str:
     )
 
 
-async def verify_pdf(
-    path: Path, *, model: str, client: AsyncOpenAI, max_pages: int
+async def classify_text(
+    name: str, text: str, *, model: str, client: AsyncOpenAI
 ) -> ProtocolCheck:
-    """Classify a single PDF; no extractable text -> not a protocol."""
-    text = extract_first_pages_text(path, max_pages)
-    if not text:
-        return ProtocolCheck(
-            is_protocol=False, doc_type="unknown", reason="no extractable PDF text"
-        )
-
+    """Ask the LLM whether ``text`` is a protocol/SAP, with a confidence."""
     messages = [
         {"role": "system", "content": _SYSTEM},
-        {"role": "user", "content": _user_prompt(path.name, text)},
+        {"role": "user", "content": _user_prompt(name, text)},
     ]
     try:
         completion = await client.chat.completions.parse(
@@ -93,7 +136,8 @@ async def verify_pdf(
                 {
                     "role": "user",
                     "content": 'Reply with ONLY JSON: {"is_protocol": bool, '
-                    '"doc_type": string, "reason": string}',
+                    '"doc_type": string, "confidence": number 0..1, '
+                    '"reason": string}',
                 }
             ],
             temperature=0,
@@ -102,18 +146,23 @@ async def verify_pdf(
         start, end = raw.find("{"), raw.rfind("}")
         return ProtocolCheck.model_validate_json(raw[start : end + 1])
     except Exception as exc:
+        # Couldn't classify -> low-confidence negative (won't trigger deletion).
         return ProtocolCheck(
-            is_protocol=False, doc_type="unknown", reason=f"verify failed: {exc}"
+            is_protocol=False,
+            doc_type="unknown",
+            confidence=0.0,
+            reason=f"verify failed: {exc}",
         )
 
 
 async def verify_and_filter(
     paths: list[str], settings: Settings
 ) -> tuple[list[str], list[tuple[str, str]]]:
-    """Verify each PDF; delete the ones that aren't a protocol/SAP.
+    """Verify each PDF; delete only the ones confidently judged not a protocol/SAP.
 
-    Returns ``(kept_paths, [(deleted_path, reason), ...])``. Non-PDF files are
-    kept (we don't blindly delete e.g. a .docx protocol).
+    Returns ``(kept_paths, [(deleted_path, reason), ...])``. Non-PDF files and
+    PDFs with no extractable text are kept (we don't delete what we can't
+    disprove).
     """
     client = AsyncOpenAI(
         api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("BASE_URL")
@@ -128,21 +177,27 @@ async def verify_and_filter(
             kept.append(path_str)
             continue
 
-        check = await verify_pdf(
-            path,
-            model=settings.verify_model,
-            client=client,
-            max_pages=settings.verify_pages,
+        text = extract_first_pages_text(path, settings.verify_pages)
+        if not text:
+            log.info("keeping (no extractable text, unverified): %s", path.name)
+            kept.append(path_str)
+            continue
+
+        check = await classify_text(
+            path.name, text, model=settings.verify_model, client=client
         )
-        if check.is_protocol:
-            log.info("verified %s as %s", path.name, check.doc_type)
+        keep, reason = decide(
+            check, has_protocol_marker(text), settings.verify_reject_threshold
+        )
+        if keep:
+            log.info("%s -> %s", path.name, reason)
             kept.append(path_str)
         else:
-            log.info("rejecting %s: %s", path.name, check.reason)
+            log.info("%s -> %s", path.name, reason)
             try:
                 path.unlink()
             except OSError:
                 pass
-            rejected.append((path_str, check.reason))
+            rejected.append((path_str, reason))
 
     return kept, rejected
