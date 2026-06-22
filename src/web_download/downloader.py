@@ -26,13 +26,24 @@ def _files_in(directory: Path) -> set[Path]:
     return {p for p in directory.iterdir() if p.is_file()} if directory.exists() else set()
 
 
+def _usage(history) -> tuple[float, int]:
+    """Pull (cost_usd, tokens) out of a browser-use history, defaulting to 0."""
+    u = getattr(history, "usage", None)
+    if u is None:
+        return 0.0, 0
+    return float(getattr(u, "total_cost", 0.0) or 0.0), int(
+        getattr(u, "total_tokens", 0) or 0
+    )
+
+
 async def download_article(
     url: str, dest_dir: Path, settings: Settings
-) -> tuple[list[str], str | None]:
-    """Run the agent against ``url``; return (downloaded file paths, error|None).
+) -> tuple[list[str], str | None, float, int]:
+    """Run the agent against ``url``.
 
-    Any exception is captured and returned as the error string so a batch run is
-    never aborted by one bad article.
+    Returns ``(downloaded paths, error|None, cost_usd, tokens)``. Any exception is
+    captured and returned as the error string so a batch run is never aborted by
+    one bad article.
     """
     from browser_use import Agent, Browser
     from browser_use.llm import ChatOpenAI
@@ -57,6 +68,7 @@ async def download_article(
     )
 
     error: str | None = None
+    cost_usd, tokens = 0.0, 0
     try:
         agent = Agent(
             task=load_prompt(settings.prompt_path, url),
@@ -71,7 +83,8 @@ async def download_article(
             step_timeout=settings.agent_step_timeout,
         )
         history = await agent.run(max_steps=settings.agent_max_steps)
-        log.info("agent usage for %s: %s", url, getattr(history, "usage", None))
+        cost_usd, tokens = _usage(history)
+        log.info("agent usage for %s: $%.4f, %d tokens", url, cost_usd, tokens)
     except Exception as exc:  # network, agent, or browser failure
         error = f"agent failed: {exc}"
         log.warning("%s", error)
@@ -82,4 +95,4 @@ async def download_article(
             pass
 
     downloaded = sorted(str(p) for p in (_files_in(dest_dir) - before))
-    return downloaded, error
+    return downloaded, error, cost_usd, tokens

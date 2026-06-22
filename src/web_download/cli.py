@@ -32,6 +32,13 @@ def _build_parser() -> argparse.ArgumentParser:
     src.add_argument("--title", help="Paper title/citation to resolve via DOI")
     src.add_argument("--papers", help="Path to a papers.json to batch over")
 
+    p.add_argument(
+        "--start",
+        type=int,
+        default=0,
+        help="0-based index of the first paper to process in --papers mode "
+        "(skip the preceding ones; useful to resume a batch)",
+    )
     p.add_argument("--limit", type=int, help="Max papers to process in --papers mode")
     p.add_argument("--out", help="Output directory for downloaded protocols")
     p.add_argument("--headed", action="store_true", help="Show the browser window")
@@ -39,9 +46,10 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _load_titles(papers_path: str, limit: int | None) -> list[str]:
+def _load_titles(papers_path: str, start: int, limit: int | None) -> list[str]:
     data = json.loads(Path(papers_path).read_text())
     titles = [item["paper_title"] for item in data if item.get("paper_title")]
+    titles = titles[start:] if start else titles
     return titles[:limit] if limit else titles
 
 
@@ -78,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     # Append a bookkeeping row per paper as it completes (survives interruption).
     with BookkeepingWriter(settings.downloads_dir) as bk:
         if args.papers:
-            titles = _load_titles(args.papers, args.limit)
+            titles = _load_titles(args.papers, args.start, args.limit)
             results = asyncio.run(run_titles(titles, settings, on_result=bk.write))
         elif args.title:
             results = [

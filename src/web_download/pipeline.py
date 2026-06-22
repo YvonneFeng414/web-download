@@ -58,15 +58,20 @@ async def _run_one(
     doi: str | None = None,
 ) -> PipelineResult:
     dest_dir = _dest_subdir(settings, doi, url)
-    paths, error = await download_article(url, dest_dir, settings)
+    paths, error, download_cost, download_tokens = await download_article(
+        url, dest_dir, settings
+    )
 
     rejected_paths: list[str] = []
+    verify_tokens = 0
     if not error and paths and settings.verify_downloads:
         try:
-            paths, rejected = await verify_and_filter(paths, settings)
+            paths, rejected, verify_tokens = await verify_and_filter(paths, settings)
             rejected_paths = [p for p, _ in rejected]
         except Exception as exc:  # never let verification abort the run
             log.warning("verification failed for %s: %s", url, exc)
+
+    verify_cost = verify_tokens / 1_000_000 * settings.verify_cost_per_mtok
 
     return PipelineResult(
         article_url=url,
@@ -75,6 +80,10 @@ async def _run_one(
         downloaded_paths=paths,
         rejected_paths=rejected_paths,
         error=error,
+        download_cost=download_cost,
+        download_tokens=download_tokens,
+        verify_tokens=verify_tokens,
+        verify_cost=verify_cost,
     )
 
 

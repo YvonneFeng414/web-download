@@ -15,6 +15,12 @@ class PipelineResult(BaseModel):
     rejected_paths: list[str] = Field(default_factory=list)
     error: str | None = None
 
+    # Cost summary: download agent cost (USD) + tokens, and verify-step tokens/cost.
+    download_cost: float = 0.0
+    download_tokens: int = 0
+    verify_tokens: int = 0
+    verify_cost: float = 0.0
+
     @property
     def downloaded(self) -> list[str]:
         return self.downloaded_paths

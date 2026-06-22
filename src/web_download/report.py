@@ -21,6 +21,11 @@ _FIELDS = [
     "n_downloaded",
     "n_rejected",
     "downloaded_paths",
+    "download_cost_usd",
+    "download_tokens",
+    "verify_tokens",
+    "verify_cost_usd",
+    "total_cost_usd",
     "note",
 ]
 
@@ -52,6 +57,11 @@ def _row(result: PipelineResult) -> dict[str, object]:
         "n_downloaded": len(paths),
         "n_rejected": len(result.rejected_paths),
         "downloaded_paths": "; ".join(paths),
+        "download_cost_usd": f"{result.download_cost:.4f}",
+        "download_tokens": result.download_tokens,
+        "verify_tokens": result.verify_tokens,
+        "verify_cost_usd": f"{result.verify_cost:.4f}",
+        "total_cost_usd": f"{result.download_cost + result.verify_cost:.4f}",
         "note": _note(result),
     }
 

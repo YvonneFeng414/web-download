@@ -21,7 +21,7 @@ Steps:
    "Supporting Information", "Appendix", or "Additional files"); do not read the
    article body.
 3. For each supplement entry, read its description and download every one that is
-   a protocol, SAP, appendix, or unclear document.
+   a supplementary file for protocol or SAP.
 
 Do not download the main article text, or supplements that are clearly ONLY
 figures, tables, data, or consent forms. Download each file once; finish once all

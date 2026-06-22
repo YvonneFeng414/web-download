@@ -109,10 +109,15 @@ def _user_prompt(name: str, text: str) -> str:
     )
 
 
+def _tokens(completion) -> int:
+    usage = getattr(completion, "usage", None)
+    return int(getattr(usage, "total_tokens", 0) or 0) if usage else 0
+
+
 async def classify_text(
     name: str, text: str, *, model: str, client: AsyncOpenAI
-) -> ProtocolCheck:
-    """Ask the LLM whether ``text`` is a protocol/SAP, with a confidence."""
+) -> tuple[ProtocolCheck, int]:
+    """Classify ``text`` as protocol/SAP; return (decision, tokens used)."""
     messages = [
         {"role": "system", "content": _SYSTEM},
         {"role": "user", "content": _user_prompt(name, text)},
@@ -123,7 +128,7 @@ async def classify_text(
         )
         decision = completion.choices[0].message.parsed
         if decision is not None:
-            return decision
+            return decision, _tokens(completion)
     except Exception:
         # Proxy may not support structured outputs — fall back to JSON parsing.
         pass
@@ -144,24 +149,27 @@ async def classify_text(
         )
         raw = completion.choices[0].message.content or "{}"
         start, end = raw.find("{"), raw.rfind("}")
-        return ProtocolCheck.model_validate_json(raw[start : end + 1])
+        return ProtocolCheck.model_validate_json(raw[start : end + 1]), _tokens(completion)
     except Exception as exc:
         # Couldn't classify -> low-confidence negative (won't trigger deletion).
-        return ProtocolCheck(
-            is_protocol=False,
-            doc_type="unknown",
-            confidence=0.0,
-            reason=f"verify failed: {exc}",
+        return (
+            ProtocolCheck(
+                is_protocol=False,
+                doc_type="unknown",
+                confidence=0.0,
+                reason=f"verify failed: {exc}",
+            ),
+            0,
         )
 
 
 async def verify_and_filter(
     paths: list[str], settings: Settings
-) -> tuple[list[str], list[tuple[str, str]]]:
+) -> tuple[list[str], list[tuple[str, str]], int]:
     """Verify each PDF; delete only the ones confidently judged not a protocol/SAP.
 
-    Returns ``(kept_paths, [(deleted_path, reason), ...])``. Non-PDF files and
-    PDFs with no extractable text are kept (we don't delete what we can't
+    Returns ``(kept_paths, [(deleted_path, reason), ...], verify_tokens)``. Non-PDF
+    files and PDFs with no extractable text are kept (we don't delete what we can't
     disprove).
     """
     client = AsyncOpenAI(
@@ -169,6 +177,7 @@ async def verify_and_filter(
     )
     kept: list[str] = []
     rejected: list[tuple[str, str]] = []
+    tokens = 0
 
     for path_str in paths:
         path = Path(path_str)
@@ -183,9 +192,10 @@ async def verify_and_filter(
             kept.append(path_str)
             continue
 
-        check = await classify_text(
+        check, used = await classify_text(
             path.name, text, model=settings.verify_model, client=client
         )
+        tokens += used
         keep, reason = decide(
             check, has_protocol_marker(text), settings.verify_reject_threshold
         )
@@ -200,4 +210,4 @@ async def verify_and_filter(
                 pass
             rejected.append((path_str, reason))
 
-    return kept, rejected
+    return kept, rejected, tokens

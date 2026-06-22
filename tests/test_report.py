@@ -44,7 +44,7 @@ def test_write_bookkeeping_rows(tmp_path):
 
 def test_bookkeeping_writer_appends_incrementally(tmp_path):
     with BookkeepingWriter(tmp_path) as bk:
-        assert bk.path.read_text().strip() == "title,doi,url,status,n_downloaded,n_rejected,downloaded_paths,note"
+        assert bk.path.read_text().strip() == "title,doi,url,status,n_downloaded,n_rejected,downloaded_paths,download_cost_usd,download_tokens,verify_tokens,verify_cost_usd,total_cost_usd,note"
 
         bk.write(_downloaded_result())
         assert len(bk.path.read_text().strip().splitlines()) == 2
@@ -54,6 +54,28 @@ def test_bookkeeping_writer_appends_incrementally(tmp_path):
 
     rows = list(csv.DictReader(bk.path.open()))
     assert [r["status"] for r in rows] == ["protocol", "skipped"]
+
+
+def test_cost_columns(tmp_path):
+    r = PipelineResult(
+        article_url="u",
+        doi="10.1/x",
+        downloaded_paths=["p.pdf"],
+        download_cost=0.0200,
+        download_tokens=8000,
+        verify_tokens=1450,
+        verify_cost=0.0036,
+    )
+    rows = list(csv.DictReader(write_bookkeeping([r], tmp_path).open()))
+    assert rows[0]["verify_tokens"] == "1450"
+    assert rows[0]["verify_cost_usd"] == "0.0036"
+    assert rows[0]["total_cost_usd"] == "0.0236"  # download + verify
+
+
+def test_verify_cost_rate():
+    # 1,450 tokens @ $2.50 / 1M tokens -> $0.003625
+    rate = 2.5
+    assert round(1450 / 1_000_000 * rate, 6) == 0.003625
 
 
 def test_write_bookkeeping_creates_out_dir(tmp_path):

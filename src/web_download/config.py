@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     agent_model: str = Field(default="gpt-5.2")
 
     # Caps on the agent's run.
-    agent_max_steps: int = Field(default=10, ge=1)
+    agent_max_steps: int = Field(default=15, ge=1)
     agent_max_failures: int = Field(default=2, ge=0)
 
     # General task prompt template (formatted with the article {url}).
@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     # Min classifier confidence-in-a-negative needed to DELETE a file (when the
     # document has no explicit protocol/SAP marker). Higher = more conservative.
     verify_reject_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    # Price of the verify model, USD per 1,000,000 tokens, used to turn
+    # verify_tokens into verify_cost_usd in the bookkeeping CSV.
+    verify_cost_per_mtok: float = Field(default=0.0, ge=0.0)
 
     # Run the browser without a visible window. Defaults to False: publisher
     # anti-bot challenges (e.g. JAMA's Cloudflare) only clear in headed mode.

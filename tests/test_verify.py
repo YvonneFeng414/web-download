@@ -74,17 +74,20 @@ async def test_verify_and_filter_keeps_marked_file_despite_llm_no(tmp_path, monk
     _make_pdf(unrelated, "eFigures and eTables only")
 
     async def fake_classify(name, text, **kwargs):
-        # LLM confidently says NOT a protocol for both
-        return _check(False, 0.95)
+        # LLM confidently says NOT a protocol for both; (decision, tokens)
+        return _check(False, 0.95), 42
 
     monkeypatch.setattr(verify, "classify_text", fake_classify)
 
-    kept, rejected = await verify_and_filter([str(marked), str(unrelated)], Settings())
+    kept, rejected, tokens = await verify_and_filter(
+        [str(marked), str(unrelated)], Settings()
+    )
 
     # marked file survives (fact overrides), unrelated is deleted
     assert str(marked) in kept and marked.exists()
     assert [p for p, _ in rejected] == [str(unrelated)]
     assert not unrelated.exists()
+    assert tokens == 84  # 42 per classified PDF, both classified
 
 
 async def test_verify_and_filter_keeps_no_text_pdf(tmp_path, monkeypatch):
@@ -95,5 +98,5 @@ async def test_verify_and_filter_keeps_no_text_pdf(tmp_path, monkeypatch):
         raise AssertionError("classifier must not run on no-text files")
 
     monkeypatch.setattr(verify, "classify_text", boom)
-    kept, rejected = await verify_and_filter([str(junk)], Settings())
-    assert kept == [str(junk)] and rejected == []
+    kept, rejected, tokens = await verify_and_filter([str(junk)], Settings())
+    assert kept == [str(junk)] and rejected == [] and tokens == 0
