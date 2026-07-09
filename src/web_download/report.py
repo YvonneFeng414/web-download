@@ -1,8 +1,9 @@
 """Per-paper bookkeeping CSV summarizing protocol-download outcomes.
 
 One row per processed paper, recording whether a protocol was found/downloaded,
-skipped (no DOI/URL), or processed without any protocol. Written into the output
-directory so a batch run leaves an auditable ledger alongside the PDFs.
+skipped (no DOI/URL), or processed without any protocol. Written as a sibling of
+the output directory (``{out_dir}_bookkeeping.csv``) so a batch run leaves an
+auditable ledger next to the output folder.
 """
 
 from __future__ import annotations
@@ -78,7 +79,7 @@ class BookkeepingWriter:
     """
 
     def __init__(self, out_dir: Path):
-        self.path = out_dir / CSV_NAME
+        self.path = out_dir.parent / f"{out_dir.name}_{CSV_NAME}"
         self._fh = None
         self._writer: csv.DictWriter | None = None
 
@@ -101,7 +102,7 @@ class BookkeepingWriter:
 
 
 def write_bookkeeping(results: list[PipelineResult], out_dir: Path) -> Path:
-    """Write one CSV row per result into ``out_dir/bookkeeping.csv``; return path."""
+    """Write one CSV row per result into ``{out_dir}_bookkeeping.csv``; return path."""
     with BookkeepingWriter(out_dir) as bk:
         for result in results:
             bk.write(result)
