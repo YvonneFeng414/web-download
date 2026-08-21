@@ -1,9 +1,10 @@
 """Download a protocol PDF with a single browser-use Agent.
 
-A general prompt (``Settings.prompt_path``) tells the agent to open the article,
-find the supplementary-material section, and download the study protocol /
-statistical analysis plan. Files land directly in ``dest_dir`` because the
-browser-use ``Browser`` is created with ``downloads_path=dest_dir``.
+The task prompt (shared body + the one publisher fragment, see
+``web_download.publishers``) tells the agent to open the article, find the
+supplementary-material section, and download the study protocol / statistical
+analysis plan. Files land directly in ``dest_dir`` because the browser-use
+``Browser`` is created with ``downloads_path=dest_dir``.
 """
 
 from __future__ import annotations
@@ -13,17 +14,16 @@ import os
 from pathlib import Path
 
 from web_download.config import Settings
+from web_download.publishers import build_task_prompt
 
 log = logging.getLogger("web_download")
 
 
-def load_prompt(prompt_path: Path, url: str) -> str:
-    """Read the prompt template and substitute ``{url}``."""
-    return prompt_path.read_text(encoding="utf-8").format(url=url)
-
-
 def _files_in(directory: Path) -> set[Path]:
-    return {p for p in directory.iterdir() if p.is_file()} if directory.exists() else set()
+    """Regular (non-hidden) files directly in ``directory``."""
+    if not directory.exists():
+        return set()
+    return {p for p in directory.iterdir() if p.is_file() and not p.name.startswith(".")}
 
 
 def _usage(history) -> tuple[float, int]:
@@ -37,9 +37,16 @@ def _usage(history) -> tuple[float, int]:
 
 
 async def download_article(
-    url: str, dest_dir: Path, settings: Settings
+    url: str,
+    dest_dir: Path,
+    settings: Settings,
+    *,
+    publisher: str | None = None,
 ) -> tuple[list[str], str | None, float, int]:
     """Run the agent against ``url``.
+
+    ``publisher`` picks which publisher fragment goes into the task prompt; when
+    omitted it is detected from the URL/DOI.
 
     Returns ``(downloaded paths, error|None, cost_usd, tokens)``. Any exception is
     captured and returned as the error string so a batch run is never aborted by
@@ -49,7 +56,6 @@ async def download_article(
     from browser_use.llm import ChatOpenAI
 
     dest_dir.mkdir(parents=True, exist_ok=True)
-    before = _files_in(dest_dir)
 
     browser = Browser(
         headless=settings.headless,
@@ -71,7 +77,7 @@ async def download_article(
     cost_usd, tokens = 0.0, 0
     try:
         agent = Agent(
-            task=load_prompt(settings.prompt_path, url),
+            task=build_task_prompt(url, settings, publisher=publisher),
             llm=llm,
             browser=browser,
             calculate_cost=True,
@@ -94,5 +100,8 @@ async def download_article(
         except Exception:
             pass
 
-    downloaded = sorted(str(p) for p in (_files_in(dest_dir) - before))
+    # Verify every file now in this per-DOI folder, not just files that are new
+    # since the run started. A re-run overwrites an existing download in place,
+    # which a before/after diff would miss — leaving a real protocol unverified.
+    downloaded = sorted(str(p) for p in _files_in(dest_dir))
     return downloaded, error, cost_usd, tokens

@@ -27,7 +27,7 @@ def test_write_bookkeeping_rows(tmp_path):
     ]
 
     path = write_bookkeeping(results, tmp_path)
-    assert path == tmp_path / CSV_NAME
+    assert path == tmp_path.parent / f"{tmp_path.name}_{CSV_NAME}"
 
     rows = list(csv.DictReader(path.open()))
     assert [r["status"] for r in rows] == ["protocol", "no_protocol", "skipped"]

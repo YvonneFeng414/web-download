@@ -1,0 +1,4 @@
+- NEJM (nejm.org): the supplement list is NOT under "Media" — that drawer holds
+  only Figures (its "Other" tab is disabled when there are no document
+  supplements). Reach it via the "Contents" menu -> "Supplementary Material"
+  (near the bottom of the article, below the references), then scroll to it.

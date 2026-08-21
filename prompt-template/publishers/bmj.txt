@@ -1,0 +1,8 @@
+   - BMJ (bmj.com): open the "Data supplement" link in the article. Each data-
+     supplement file's DESCRIPTION sits next to/beneath its link (the link itself
+     just says "Data Supplement"), so use an extract action to read it. Download the
+     file if its description mentions "Statistical Analysis Plan" or "Study Protocol",
+     OR if it is a single combined/generic supplement (e.g. "Web appendix",
+     "Supplementary file", "Supplementary material") — BMJ usually bundles the
+     protocol, SAP, and tables into ONE such file, so download that one even without
+     the exact words.

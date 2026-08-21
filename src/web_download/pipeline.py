@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from web_download.config import Settings, get_settings
 from web_download.downloader import download_article
 from web_download.models import PipelineResult
+from web_download.publishers import detect_publisher
 from web_download.resolve import extract_doi, resolve_article_url
 from web_download.verify import verify_and_filter
 
@@ -58,8 +59,12 @@ async def _run_one(
     doi: str | None = None,
 ) -> PipelineResult:
     dest_dir = _dest_subdir(settings, doi, url)
+    # --publisher / WD_PUBLISHER wins; otherwise infer it here, where the DOI is
+    # still at hand (batch URLs are bare doi.org links with no publisher host).
+    publisher = settings.publisher or detect_publisher(url, doi)
+    log.info("using %s publisher notes for %s", publisher or "generic", url)
     paths, error, download_cost, download_tokens = await download_article(
-        url, dest_dir, settings
+        url, dest_dir, settings, publisher=publisher
     )
 
     rejected_paths: list[str] = []

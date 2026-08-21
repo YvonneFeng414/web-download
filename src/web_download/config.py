@@ -26,14 +26,21 @@ class Settings(BaseSettings):
 
     # LLM model the browser-use agent drives (via OPENAI_API_KEY + BASE_URL).
     # A smaller model is the other big cost/latency lever (set WD_AGENT_MODEL).
-    agent_model: str = Field(default="gpt-5.2")
+    agent_model: str = Field(default="gpt-5.4")
 
     # Caps on the agent's run.
     agent_max_steps: int = Field(default=15, ge=1)
     agent_max_failures: int = Field(default=2, ge=0)
 
-    # General task prompt template (formatted with the article {url}).
+    # Shared task-prompt body (formatted with the article {url} and the chosen
+    # publisher's {publisher_notes}).
     prompt_path: Path = Field(default=Path("prompt-template/task_prompt.txt"))
+    # One <key>.txt fragment per publisher (jama, nejm, lancet, bmj) plus
+    # generic.txt; only the matching one is injected into the agent's context.
+    publisher_notes_dir: Path = Field(default=Path("prompt-template/publishers"))
+    # Force a publisher instead of detecting it from the URL/DOI (WD_PUBLISHER or
+    # --publisher). None = auto-detect, falling back to the generic notes.
+    publisher: str | None = Field(default=None)
 
     # --- Efficiency knobs (defaults tuned for cheaper/faster runs) ---
     # DOM-only by default (no per-step screenshot) — the biggest token/latency
@@ -60,12 +67,25 @@ class Settings(BaseSettings):
     # Confirm each downloaded PDF is actually a protocol/SAP; delete the rest.
     verify_downloads: bool = Field(default=True)
     # Model used for the content check (a smaller model is ideal/cheap here).
-    verify_model: str = Field(default="gpt-5.2")
-    # First pages of the PDF to read for the check.
+    verify_model: str = Field(default="gpt-5.4")
+    # First pages of the PDF to read for the LLM slice (Tier-3 borderline check).
     verify_pages: int = Field(default=10, ge=1)
     # Min classifier confidence-in-a-negative needed to DELETE a file (when the
     # document has no explicit protocol/SAP marker). Higher = more conservative.
     verify_reject_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    # Scan the WHOLE document (not just the first pages) with rule-based signals so
+    # a protocol buried deep in a composite supplement is still found. Off => legacy
+    # first-`verify_pages` behavior only (escape hatch).
+    verify_whole_doc: bool = Field(default=True)
+    # Safety cap: never scan more than this many pages of a pathological PDF.
+    verify_max_scan_pages: int = Field(default=400, ge=1)
+    # Distinct SPIRIT-style sections required to call a file a FULL protocol.
+    verify_section_score_full: int = Field(default=4, ge=1, le=6)
+    # ...and to call it a PARTIAL protocol (kept, but weaker signal).
+    verify_section_score_partial: int = Field(default=3, ge=1, le=6)
+    # At/below this section count, with no header and no metadata, the rules alone
+    # may DELETE the file (Tier 2) without consulting the LLM.
+    verify_section_score_clear_negative: int = Field(default=1, ge=0, le=6)
     # Price of the verify model, USD per 1,000,000 tokens, used to turn
     # verify_tokens into verify_cost_usd in the bookkeeping CSV.
     verify_cost_per_mtok: float = Field(default=0.0, ge=0.0)

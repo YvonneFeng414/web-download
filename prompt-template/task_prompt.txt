@@ -20,10 +20,7 @@ Steps:
 2. Open the supplementary-materials section (a link like "Supplementary Material",
    "Supporting Information", "Appendix", or "Additional files"); do not read the
    article body. Publisher notes:
-   - NEJM (nejm.org): the supplement list is NOT under "Media" — that drawer holds
-     only Figures (its "Other" tab is disabled when there are no document
-     supplements). Reach it via the "Contents" menu -> "Supplementary Material"
-     (near the bottom of the article, below the references), then scroll to it.
+{publisher_notes}
    Once you have inspected a panel/section, trust the result and move on — do NOT
    re-open or re-check the same panel you already examined.
 3. For each supplement entry, read its description and download every one that is

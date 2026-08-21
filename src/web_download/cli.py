@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from web_download.config import get_settings
 from web_download.models import PipelineResult
 from web_download.pipeline import run, run_from_title, run_titles
+from web_download.publishers import PUBLISHERS
 from web_download.report import BookkeepingWriter
 
 
@@ -40,6 +41,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "(skip the preceding ones; useful to resume a batch)",
     )
     p.add_argument("--limit", type=int, help="Max papers to process in --papers mode")
+    p.add_argument(
+        "--publisher",
+        choices=("auto", *PUBLISHERS),
+        default="auto",
+        help="Which publisher's prompt notes to give the agent; only this one is "
+        "put in its context (default: auto-detect from the URL/DOI)",
+    )
     p.add_argument("--out", help="Output directory for downloaded protocols")
     p.add_argument("--headed", action="store_true", help="Show the browser window")
     p.add_argument("-v", "--verbose", action="store_true")
@@ -82,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
         settings.downloads_dir = Path(args.out)
     if args.headed:
         settings.headless = False
+    if args.publisher != "auto":
+        settings.publisher = args.publisher
 
     # Append a bookkeeping row per paper as it completes (survives interruption).
     with BookkeepingWriter(settings.downloads_dir) as bk:

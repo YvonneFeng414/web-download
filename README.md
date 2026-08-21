@@ -41,7 +41,9 @@ uv run web-download <url> --out downloads -v
 ```
 
 Flags: `--out DIR` (output directory), `--headed` (show the browser), `-v`
-(verbose); plus `--start N` / `--limit N` for `--papers` batches.
+(verbose), `--publisher {jama,nejm,lancet,bmj}` (which publisher's prompt notes
+the agent gets; default auto-detect); plus `--start N` / `--limit N` for
+`--papers` batches.
 
 ### Starting from a title instead of a URL
 
@@ -70,9 +72,36 @@ uv run pytest          # pure-logic tests run offline; browser test skips if chr
 ## Tuning agent behavior
 
 There are no per-publisher adapters — a single browser-use agent handles every
-site, driven entirely by the task prompt at
-[prompt-template/task_prompt.txt](prompt-template/task_prompt.txt). To adjust how
-the agent finds or filters supplements (e.g. journal-specific hints), edit that
-prompt; runtime knobs (model, step budget, verification) live in
+site, driven entirely by its task prompt. The prompt is assembled per run from a
+shared body, [prompt-template/task_prompt.txt](prompt-template/task_prompt.txt),
+plus **one** publisher fragment from
+[prompt-template/publishers/](prompt-template/publishers/) substituted into its
+`{publisher_notes}` slot — so a JAMA run never carries NEJM/Lancet/BMJ
+navigation hints in its context.
+
+The publisher comes from `--publisher` (or `WD_PUBLISHER`) when given; otherwise
+[detect_publisher](src/web_download/publishers.py) infers it from the article
+host, falling back to the DOI prefix (`10.1001`→JAMA, `10.1056`→NEJM,
+`10.1136`→BMJ, `10.1016/S0140-6736`→Lancet) — the DOI is what a batch run has,
+since those URLs are bare `doi.org` links. Anything unrecognized gets
+`generic.txt`.
+
+```bash
+# batches are single-publisher, so name it explicitly
+uv run web-download --papers downloads/papers_bmj.json --publisher bmj --out downloads/bmj -v
+```
+
+To teach the agent about a new publisher, drop a `<key>.txt` in
+`prompt-template/publishers/` and add its host/DOI prefix to
+[src/web_download/publishers.py](src/web_download/publishers.py). Publisher-agnostic
+rules (anti-bot handling, "downloaded means saved to disk", the not-found clause)
+belong in the shared body. Runtime knobs (model, step budget, verification) live in
 [src/web_download/config.py](src/web_download/config.py) and are overridable via
 `WD_*` environment variables.
+
+
+# appendix
+
+```
+web-download --papers downloads/papers_nejm.json --out downloads/nejm --start 739 --limit 10 -v
+```

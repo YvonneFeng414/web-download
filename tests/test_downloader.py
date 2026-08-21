@@ -48,7 +48,7 @@ def _install_fake_browser_use(monkeypatch, captured):
 async def test_download_article_forwards_efficiency_knobs(tmp_path, monkeypatch):
     captured: dict = {}
     _install_fake_browser_use(monkeypatch, captured)
-    monkeypatch.setattr(downloader, "load_prompt", lambda path, url: "TASK")
+    monkeypatch.setattr(downloader, "build_task_prompt", lambda *a, **kw: "TASK")
 
     settings = Settings(downloads_dir=tmp_path)
     paths, error, cost, tokens = await downloader.download_article(
@@ -65,3 +65,58 @@ async def test_download_article_forwards_efficiency_knobs(tmp_path, monkeypatch)
     assert captured["browser"]["auto_download_pdfs"] == settings.auto_download_pdfs
     assert captured["browser"]["wait_between_actions"] == settings.wait_between_actions
     assert captured["max_steps"] == settings.agent_max_steps
+
+
+async def test_download_article_task_carries_one_publisher_only(tmp_path, monkeypatch):
+    """The agent's task must hold the selected publisher's notes and no others."""
+    captured: dict = {}
+    _install_fake_browser_use(monkeypatch, captured)
+
+    settings = Settings(downloads_dir=tmp_path)
+    await downloader.download_article(
+        "https://doi.org/10.1001/jama.2016.1",
+        tmp_path / "10.1001_jama.2016.1",
+        settings,
+        publisher="jama",
+    )
+
+    task = captured["agent"]["task"]
+    assert "https://doi.org/10.1001/jama.2016.1" in task
+    assert "Supplemental Content" in task  # JAMA note
+    assert "Data supplement" not in task  # BMJ note stays out of context
+    assert "thelancet.com" not in task
+
+
+async def test_download_article_reports_preexisting_file(tmp_path, monkeypatch):
+    """A file already in the per-DOI folder (e.g. from a re-run that overwrites it)
+    must still be returned so the verifier runs on it — a before/after diff misses it."""
+    _install_fake_browser_use(monkeypatch, {})
+    monkeypatch.setattr(downloader, "build_task_prompt", lambda *a, **kw: "TASK")
+
+    dest = tmp_path / "10.1_x"
+    dest.mkdir(parents=True)
+    (dest / "mmc1.pdf").write_bytes(b"%PDF-1.4 left by a prior run")
+
+    settings = Settings(downloads_dir=tmp_path)
+    paths, error, _cost, _tokens = await downloader.download_article(
+        "https://x/a", dest, settings
+    )
+    assert error is None
+    assert paths == [str(dest / "mmc1.pdf")]
+
+
+async def test_download_article_ignores_hidden_files(tmp_path, monkeypatch):
+    _install_fake_browser_use(monkeypatch, {})
+    monkeypatch.setattr(downloader, "build_task_prompt", lambda *a, **kw: "TASK")
+
+    dest = tmp_path / "10.1_x"
+    dest.mkdir(parents=True)
+    (dest / ".DS_Store").write_bytes(b"junk")
+    (dest / "protocol.pdf").write_bytes(b"%PDF-1.4")
+
+    settings = Settings(downloads_dir=tmp_path)
+    paths, error, _cost, _tokens = await downloader.download_article(
+        "https://x/a", dest, settings
+    )
+    assert error is None
+    assert paths == [str(dest / "protocol.pdf")]  # .DS_Store excluded

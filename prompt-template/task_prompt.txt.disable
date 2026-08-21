@@ -1,0 +1,62 @@
+You are a research assistant downloading trial documents from a medical-journal
+article page.
+
+Open: {url}
+
+Task: download EVERY supplementary file that could be the STUDY PROTOCOL or
+STATISTICAL ANALYSIS PLAN (SAP) — including a combined "Supplementary Appendix" or
+any document-type supplement you are unsure about. An automated check afterwards
+keeps the genuine protocol/SAP and discards the rest, so err toward including a
+borderline file; missing the real protocol is the failure to avoid.
+
+Identify each file by the DESCRIPTIVE TEXT next to its link (caption, list-item,
+or heading) — NOT the link text or file name, which are often generic (e.g.
+"Supplement 2", "joi250096supp2_prod.pdf"). Example: text reading "Supplement 1.
+Trial Protocol and Statistical Analysis Plan" -> download that file.
+
+ALWAYS, AT EVERY STEP (not just the first): if a Cloudflare challenge (a "Verify
+you are human" checkbox or a "Checking your browser…" page) or any pop-up / cookie
+/ consent / newsletter overlay appears at ANY point, resolve it FIRST before any
+other action — click the checkbox / Accept / Close / the X if one is present,
+otherwise wait a few seconds for it to clear — then continue.
+
+Steps:
+1. Go straight to the supplementary-materials section (a link like "Supplementary
+   Material", "Supporting Information", "Appendix", or "Additional files"); do not
+   read the article body. Publisher notes:
+{publisher_notes}
+   Once you are at/have opened the section, do NOT scroll to find or read the links.
+   Use ONE find_elements action to list the supplement links — e.g. a selector like
+   `a[href*='suppl'], a[href*='appendix'], a[href$='.pdf']`. These links are in the
+   page's DOM even when off-screen, so you never need to scroll to see them. NEVER
+   scroll to the bottom of the page looking for supplements — that scrolls past the
+   links and makes you miss them.
+   The link's OWN text is usually generic or empty; the DESCRIPTION lives in nearby
+   text, NOT inside the <a>. So if find_elements does not already hand you each link's
+   description, make ONE extract action (ask for every supplement link plus the
+   descriptive text next to/beneath it) and act on that result. Inspect a given
+   section AT MOST ONCE with find_elements and ONCE with extract. If you are about to
+   call find_elements/extract on a section you already inspected, STOP — you are
+   looping: trust what you already have and either download the candidate or call
+   done. Do NOT re-open or re-check a panel you have inspected.
+2. From the find_elements results, read each entry's description and download every
+   one that is a supplementary file for protocol or SAP.
+
+IMPORTANT — "downloaded" means SAVED TO DISK, not just clicked. On many journals a
+supplement's "Download" link only OPENS the PDF in the browser's built-in viewer; it
+does NOT save a file. When that happens, you MUST then click the viewer's own
+Download/Save button (the save icon) to write the file to disk. Do NOT treat "the PDF
+opened in the viewer" as "downloaded."
+
+Do not download the main article text, or supplements that are clearly ONLY figures,
+tables, data, or consent forms. Download each file once. Call done ONLY after every
+protocol/SAP candidate's file is confirmed saved — i.e. it appears in your available
+downloaded files list — not merely after clicking a Download link. You do not need to
+open, read, or re-verify the file contents; a separate automated check does that.
+
+NOT FOUND: if, after inspecting the supplement list, NO file's description indicates a
+STUDY PROTOCOL or STATISTICAL ANALYSIS PLAN — and there is also no combined or
+uncertain supplement (e.g. a "Supplementary Appendix") that could contain one — then
+download nothing: call done and state clearly that no study protocol or statistical
+analysis plan was found. Do NOT keep searching, re-open panels, scroll further, or
+download unrelated figures/tables just to return something.
