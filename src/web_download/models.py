@@ -12,6 +12,8 @@ class PipelineResult(BaseModel):
     source_title: str | None = None
     doi: str | None = None
     downloaded_paths: list[str] = Field(default_factory=list)
+    # Subset of downloaded_paths this run did not write — left by an earlier run.
+    preexisting_paths: list[str] = Field(default_factory=list)
     rejected_paths: list[str] = Field(default_factory=list)
     error: str | None = None
 

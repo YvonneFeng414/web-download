@@ -20,6 +20,7 @@ _FIELDS = [
     "url",
     "status",
     "n_downloaded",
+    "n_preexisting",
     "n_rejected",
     "downloaded_paths",
     "download_cost_usd",
@@ -32,20 +33,28 @@ _FIELDS = [
 
 
 def _status(result: PipelineResult) -> str:
-    """One of ``skipped`` (no DOI/URL), ``protocol`` (verified), ``no_protocol``."""
+    """One of ``skipped`` (no DOI/URL, or the agent never got anywhere),
+    ``protocol`` (verified, downloaded by this run), ``protocol_preexisting``
+    (verified, but every file was already on disk beforehand), ``no_protocol``."""
+    paths = result.downloaded_paths
+    if paths:
+        if len(result.preexisting_paths) == len(paths):
+            return "protocol_preexisting"
+        return "protocol"
     if result.error:
         return "skipped"
-    if result.downloaded_paths:
-        return "protocol"
     return "no_protocol"
 
 
 def _note(result: PipelineResult) -> str:
+    notes = []
     if result.error:
-        return result.error
+        notes.append(result.error)
+    if result.preexisting_paths:
+        notes.append(f"{len(result.preexisting_paths)} pre-existing file(s)")
     if result.rejected_paths:
-        return f"{len(result.rejected_paths)} file(s) rejected (not a protocol/SAP)"
-    return ""
+        notes.append(f"{len(result.rejected_paths)} file(s) rejected (not a protocol/SAP)")
+    return "; ".join(notes)
 
 
 def _row(result: PipelineResult) -> dict[str, object]:
@@ -56,6 +65,7 @@ def _row(result: PipelineResult) -> dict[str, object]:
         "url": result.article_url or "",
         "status": _status(result),
         "n_downloaded": len(paths),
+        "n_preexisting": len(result.preexisting_paths),
         "n_rejected": len(result.rejected_paths),
         "downloaded_paths": "; ".join(paths),
         "download_cost_usd": f"{result.download_cost:.4f}",

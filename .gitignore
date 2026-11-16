@@ -11,7 +11,10 @@ wheels/
 
 # Secrets and outputs
 .env
-downloads/
+/downloads*/*
+!/downloads/papers.example.json
+!/downloads-clean/.gitkeep
+
 .pytest_cache/
 
 # Persistent browser profile (cached Cloudflare clearance)
@@ -21,3 +24,5 @@ downloads/
 *scratch*
 
 .DS_Store
+
+*code-workspace

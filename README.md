@@ -63,6 +63,36 @@ Downloads are grouped per article into a DOI-named subfolder under `--out`
 (e.g. `downloads/10.1016_j.jpeds.2020.02.024/…pdf`); when no DOI is available the
 article id is used instead.
 
+### Paywalled articles: signing in once per run
+
+`--login` pauses before the first download so you can authenticate by hand, then
+runs every article in that same signed-in browser:
+
+```bash
+# open a blank browser, sign in, press Enter, then batch
+uv run web-download --papers downloads/papers.json --login -v
+
+# or land on your institution's SSO entry point first
+uv run web-download --papers downloads/papers.json --login "https://shib.example.edu/idp" -v
+```
+
+The sign-in is manual on purpose — credentials never enter the agent's prompt.
+
+This works because a run reuses one browser for all its articles (`share_browser`,
+on by default). That is not just an optimization: institutional SSO
+(Shibboleth/SAML) issues **session-scoped** cookies, which die with the browser
+process and cannot be cached in the persistent profile. A browser per article
+would throw the login away after the first paper. Reusing one browser also means
+Cloudflare is cleared once per run instead of once per article.
+
+The tradeoff is blast radius: if that browser dies mid-run, the remaining articles
+fail, whereas a per-article browser isolates the damage. `--no-shared-browser`
+(or `WD_SHARE_BROWSER=false`) restores the isolated behavior — but then `--login`
+buys you nothing, so the two flags are refused together.
+
+Note that publisher sessions still idle out after a few hours, so a very long
+batch may need re-authenticating partway through.
+
 ## Tests
 
 ```bash
@@ -98,6 +128,36 @@ rules (anti-bot handling, "downloaded means saved to disk", the not-found clause
 belong in the shared body. Runtime knobs (model, step budget, verification) live in
 [src/web_download/config.py](src/web_download/config.py) and are overridable via
 `WD_*` environment variables.
+
+## Flaky providers
+
+`BASE_URL` often points at an OpenAI-compatible proxy, and not every proxy honors
+strict `json_schema` — some return a valid JSON object with extra characters after
+it, which browser-use counts as a step failure. Three things absorb that:
+
+- [src/web_download/llm.py](src/web_download/llm.py) salvages the first complete
+  JSON object from a non-compliant response. The request is unchanged, so a
+  compliant provider is unaffected. Run with `-v` and a debug log level to see
+  `salvaged first JSON object` when it fires.
+- `WD_FALLBACK_BASE_URL` adds a second provider; browser-use switches to it for the
+  rest of a run when the primary returns a retryable error.
+- `WD_AGENT_LLM_TIMEOUT` / `WD_AGENT_STEP_TIMEOUT` for a slow provider — raise both,
+  keeping the step timeout above the LLM timeout.
+
+## Reading the bookkeeping CSV
+
+`status` distinguishes where a file came from:
+
+| status | meaning |
+| --- | --- |
+| `protocol` | this run downloaded and verified at least one protocol/SAP |
+| `protocol_preexisting` | files verified, but every one was already on disk — this run added nothing (see `note`) |
+| `no_protocol` | the run completed and found nothing to keep |
+| `skipped` | no DOI/URL resolved, or the agent never got anywhere |
+
+The CLI prints `[SAVED]` vs `[EXISTING]` for the same distinction. Re-running a
+batch over a populated output directory is safe: pre-existing files are still
+re-verified, they just aren't credited to the new run.
 
 
 # appendix

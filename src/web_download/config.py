@@ -28,9 +28,18 @@ class Settings(BaseSettings):
     # A smaller model is the other big cost/latency lever (set WD_AGENT_MODEL).
     agent_model: str = Field(default="gpt-5.4")
 
-    # Caps on the agent's run.
+    # Caps on the agent's run. max_failures matches browser-use's own default:
+    # a lower cap aborts a run on two transient provider hiccups in a row.
     agent_max_steps: int = Field(default=15, ge=1)
-    agent_max_failures: int = Field(default=2, ge=0)
+    agent_max_failures: int = Field(default=5, ge=0)
+
+    # Optional second provider. browser-use switches to it for the rest of a run
+    # when the primary returns a retryable error (401/402/429/5xx) — including the
+    # malformed structured output a non-compliant proxy produces. Built only when
+    # WD_FALLBACK_BASE_URL is set; the other two default to the primary's values.
+    fallback_base_url: str | None = Field(default=None)
+    fallback_api_key: str | None = Field(default=None)
+    fallback_model: str | None = Field(default=None)
 
     # Shared task-prompt body (formatted with the article {url} and the chosen
     # publisher's {publisher_notes}).
@@ -45,15 +54,28 @@ class Settings(BaseSettings):
     # --- Efficiency knobs (defaults tuned for cheaper/faster runs) ---
     # DOM-only by default (no per-step screenshot) — the biggest token/latency
     # win. Set WD_AGENT_USE_VISION=true for a page that needs screenshots.
-    agent_use_vision: bool = Field(default=True)
+    agent_use_vision: bool = Field(default=False)
     # browser-use's fast path: less per-step reasoning.
     agent_flash_mode: bool = Field(default=True)
     # More actions per LLM call -> fewer calls.
     agent_max_actions_per_step: int = Field(default=8, ge=1)
     # Cap conversation history growth -> fewer tokens per step.
     agent_max_history_items: int = Field(default=25, ge=1)
-    # Abandon a stuck step sooner (browser-use default is 180s).
-    agent_step_timeout: int = Field(default=90, ge=1)
+    # Per-LLM-call budget. browser-use would otherwise infer 75s from the model
+    # name, which a slower proxy overshoots.
+    agent_llm_timeout: int = Field(default=120, ge=1)
+    # Ceiling on a single completion. Raised from browser-use's 4096 because
+    # reasoning tokens are billed against it: any model whose name contains
+    # "gpt-5" (or o1/o3/o4) is sent reasoning_effort, and a step whose reasoning
+    # eats the budget returns finish_reason="length" with an EMPTY content —
+    # which the parser can only report as a step failure.
+    agent_max_completion_tokens: int = Field(default=16_384, ge=1)
+    # Abandon a stuck step sooner (browser-use default is 180s). Must stay ABOVE
+    # agent_llm_timeout, else the step aborts before the LLM call can finish.
+    agent_step_timeout: int = Field(default=150, ge=1)
+    # browser-use's post-run LLM judge. Off: it costs an extra call carrying the
+    # whole trace, and verify_downloads below is the check we actually act on.
+    agent_use_judge: bool = Field(default=False)
     # Off so the agent's explicit download is the only save (browser-use tracks
     # it), avoiding a parallel auto-save that creates "name (1).pdf" duplicates.
     # Set WD_AUTO_DOWNLOAD_PDFS=true for a rare viewer-only-PDF site.
@@ -66,26 +88,18 @@ class Settings(BaseSettings):
     # --- Post-download verification ---
     # Confirm each downloaded PDF is actually a protocol/SAP; delete the rest.
     verify_downloads: bool = Field(default=True)
-    # Model used for the content check (a smaller model is ideal/cheap here).
+    # Model used for the content check. Every verified file costs one call, so
+    # this is the whole verify budget — a smaller model is the lever to pull.
     verify_model: str = Field(default="gpt-5.4")
-    # First pages of the PDF to read for the LLM slice (Tier-3 borderline check).
+    # Front pages included VERBATIM in the digest sent to the classifier (the
+    # cover page / table of contents, where a protocol names itself). The rest of
+    # the document still reaches the LLM as the digest's page map.
     verify_pages: int = Field(default=10, ge=1)
-    # Min classifier confidence-in-a-negative needed to DELETE a file (when the
-    # document has no explicit protocol/SAP marker). Higher = more conservative.
+    # Min classifier confidence-in-a-negative needed to DELETE a file. Higher =
+    # more conservative; anything softer is kept.
     verify_reject_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
-    # Scan the WHOLE document (not just the first pages) with rule-based signals so
-    # a protocol buried deep in a composite supplement is still found. Off => legacy
-    # first-`verify_pages` behavior only (escape hatch).
-    verify_whole_doc: bool = Field(default=True)
-    # Safety cap: never scan more than this many pages of a pathological PDF.
+    # Safety cap: never read more than this many pages of a pathological PDF.
     verify_max_scan_pages: int = Field(default=400, ge=1)
-    # Distinct SPIRIT-style sections required to call a file a FULL protocol.
-    verify_section_score_full: int = Field(default=4, ge=1, le=6)
-    # ...and to call it a PARTIAL protocol (kept, but weaker signal).
-    verify_section_score_partial: int = Field(default=3, ge=1, le=6)
-    # At/below this section count, with no header and no metadata, the rules alone
-    # may DELETE the file (Tier 2) without consulting the LLM.
-    verify_section_score_clear_negative: int = Field(default=1, ge=0, le=6)
     # Price of the verify model, USD per 1,000,000 tokens, used to turn
     # verify_tokens into verify_cost_usd in the bookkeeping CSV.
     verify_cost_per_mtok: float = Field(default=0.0, ge=0.0)
@@ -100,6 +114,14 @@ class Settings(BaseSettings):
     # Persistent browser profile dir. Caches the Cloudflare clearance cookie
     # (cf_clearance) and fingerprint across runs so the challenge is solved once.
     user_data_dir: Path = Field(default=Path(".cf-profile"))
+
+    # Reuse ONE browser for every article in a run instead of launching a fresh
+    # one per article. Required for a manual sign-in to hold: publisher SSO
+    # (Shibboleth/SAML) issues session-scoped cookies that the profile above
+    # cannot cache — they die with the browser process. Also solves Cloudflare
+    # once per run rather than per article. Set WD_SHARE_BROWSER=false to go back
+    # to per-article browsers, which isolates a crash to a single article.
+    share_browser: bool = Field(default=True)
 
     def ensure_dirs(self) -> None:
         self.downloads_dir.mkdir(parents=True, exist_ok=True)

@@ -2,3 +2,16 @@
   only Figures (its "Other" tab is disabled when there are no document
   supplements). Reach it via the "Contents" menu -> "Supplementary Material"
   (near the bottom of the article, below the references), then scroll to it.
+
+  If the file is not visible, complete task.
+
+  The "Download" link BESIDE EACH SUPPLEMENT DOES NOT SAVE ANYTHING. NEJM serves
+  supplements inline, so that link only opens the PDF in the browser's viewer.
+  Clicking it and moving on is the single most common way this task fails.
+  To actually save a supplement, navigate straight to its PDF URL, which follows
+  a fixed pattern:
+    https://www.nejm.org/doi/suppl/<DOI>/suppl_file/<file>.pdf
+  e.g. .../suppl/10.1056/NEJMoa2409368/suppl_file/nejmoa2409368_protocol.pdf
+  (the file name is normally the DOI suffix plus _protocol / _appendix). Then
+  click the viewer's own Download control — the save icon in the toolbar strip
+  at the top of the PDF, NOT anything in the article page.

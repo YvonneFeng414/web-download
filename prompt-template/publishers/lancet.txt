@@ -1,1 +1,32 @@
-   - LANCET (thelancet.com): open the supplement in a new tab to download.
+   - LANCET (thelancet.com): the whole article renders at once, so the supplements
+     are already in the page state when it loads — do not scroll, do not open a
+     panel, do not read the body. Find the "Supplementary Material" section (it is
+     also an entry in the sidebar section list). Each entry shows a DESCRIPTIVE
+     caption — "Supplementary appendix", "Protocol", "Statistical analysis plan" —
+     beside a link whose own text is only "PDF (261.92 KB)" or similar. Judge every
+     entry by the caption: the link text and the file name (often mmc1.pdf /
+     mmc2.pdf, but it can be anything and need not be a PDF) tell you nothing. Take
+     whatever name the link serves and never rename it.
+
+     DOWNLOADING IS ONE CLICK. Click the entry's link where it sits in the page and
+     the file saves itself. Do not open a new tab, and do not try to read, extract
+     or reconstruct the link's URL — find_elements and search_page report only a
+     COUNT of matches back to you, never the URLs, so repeating them cannot reveal
+     a link. Click each supplement exactly ONCE: a second click on one you already
+     downloaded is silently ignored and is not a failure.
+
+     A path in available_file_paths IS the finished download, including one inside
+     a ".staging" or temp folder — that is where this pipeline collects files
+     before sorting them, and it is moved after you finish. Never wait for it to
+     move and never re-click to "make sure".
+
+     NOTHING TO DOWNLOAD: if the page shows no supplementary-material section,
+     confirm it once with find_elements, selector a[href*="/attachment/"] — every
+     Lancet supplement link matches that. A count of 0 means this article HAS no
+     supplementary files: call done straight away saying so. Do not scroll the full
+     text, do not open the article PDF, do not detour to ScienceDirect. Conclude
+     this only once the article page has really rendered; a Cloudflare / consent /
+     paywall screen is not an answer — clear it first.
+
+     A Lancet article should take 2-4 steps. If an action returned the same result
+     twice, a third try will not differ: click the link, or finish.

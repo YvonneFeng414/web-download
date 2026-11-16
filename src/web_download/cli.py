@@ -50,6 +50,20 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--out", help="Output directory for downloaded protocols")
     p.add_argument("--headed", action="store_true", help="Show the browser window")
+    p.add_argument(
+        "--login",
+        nargs="?",
+        const="",
+        metavar="URL",
+        help="Pause for a manual sign-in before downloading (opening URL first if "
+        "given), then run every article in that signed-in session",
+    )
+    p.add_argument(
+        "--no-shared-browser",
+        action="store_true",
+        help="Launch a fresh browser per article. Isolates a crash to one article, "
+        "but no sign-in or Cloudflare clearance carries between them",
+    )
     p.add_argument("-v", "--verbose", action="store_true")
     return p
 
@@ -69,21 +83,29 @@ def _print_result(result: PipelineResult) -> None:
         print(f"\nArticle: {result.article_url}")
     if result.error:
         print(f"  skipped: {result.error}")
-        return
     if result.downloaded_paths:
+        preexisting = set(result.preexisting_paths)
         for path in result.downloaded_paths:
-            print(f"  [SAVED] {path}")
-    else:
+            # [EXISTING] = verified, but left by an earlier run — this run did not
+            # write it, so don't let it read as work that just happened.
+            print(f"  [{'EXISTING' if path in preexisting else 'SAVED'}] {path}")
+    elif not result.error:
         print("  no protocol downloaded")
 
 
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
-    args = _build_parser().parse_args(argv)
+    parser = _build_parser()
+    args = parser.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO if args.verbose else logging.WARNING,
         format="%(levelname)s %(name)s: %(message)s",
     )
+
+    if args.login is not None and args.no_shared_browser:
+        # A per-article browser throws the session away after the first article,
+        # so the sign-in the user just did would buy them nothing.
+        parser.error("--login needs a shared browser; drop --no-shared-browser")
 
     settings = get_settings()
     if args.out:
@@ -92,24 +114,39 @@ def main(argv: list[str] | None = None) -> int:
         settings.headless = False
     if args.publisher != "auto":
         settings.publisher = args.publisher
+    if args.no_shared_browser:
+        settings.share_browser = False
+    if args.login is not None:
+        settings.headless = False  # you cannot sign in to a window you cannot see
+
+    # `--login` with no value pauses without navigating anywhere first.
+    login = {"pause_for_login": args.login is not None, "login_url": args.login or None}
 
     # Append a bookkeeping row per paper as it completes (survives interruption).
     with BookkeepingWriter(settings.downloads_dir) as bk:
         if args.papers:
             titles = _load_titles(args.papers, args.start, args.limit)
-            results = asyncio.run(run_titles(titles, settings, on_result=bk.write))
+            results = asyncio.run(
+                run_titles(titles, settings, on_result=bk.write, **login)
+            )
         elif args.title:
             results = [
-                asyncio.run(run_from_title(args.title, settings, on_result=bk.write))
+                asyncio.run(
+                    run_from_title(args.title, settings, on_result=bk.write, **login)
+                )
             ]
         else:
-            results = [asyncio.run(run(args.url, settings, on_result=bk.write))]
+            results = [
+                asyncio.run(run(args.url, settings, on_result=bk.write, **login))
+            ]
 
     for result in results:
         _print_result(result)
 
-    saved = sum(len(r.downloaded) for r in results)
-    print(f"\nDownloaded {saved} protocol PDF(s) -> {settings.downloads_dir}")
+    saved = sum(len(r.downloaded) - len(r.preexisting_paths) for r in results)
+    existing = sum(len(r.preexisting_paths) for r in results)
+    suffix = f" ({existing} already on disk)" if existing else ""
+    print(f"\nDownloaded {saved} protocol PDF(s){suffix} -> {settings.downloads_dir}")
     print(f"Bookkeeping CSV -> {bk.path}")
     return 0
 

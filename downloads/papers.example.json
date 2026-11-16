@@ -1,0 +1,52 @@
+[
+  {
+    "nctId": "NCT00292552",
+    "paper_title": "Wells JM, Washko GR, Han MK, Abbas N, Nath H, Mamary AJ, Regan E, Bailey WC, Martinez FJ, Westfall E, Beaty TH, Curran-Everett D, Curtis JL, Hokanson JE, Lynch DA, Make BJ, Crapo JD, Silverman EK, Bowler RP, Dransfield MT; COPDGene Investigators; ECLIPSE Study Investigators. Pulmonary arterial enlargement and acute exacerbations of COPD. N Engl J Med. 2012 Sep 6;367(10):913-21. doi: 10.1056/NEJMoa1203830. Epub 2012 Sep 3.",
+    "pmid": "22938715",
+    "ref_type": "DERIVED",
+    "primary_completion_date": "2010-02",
+    "study_completion_date": "2010-02",
+    "journal_name": "The New England journal of medicine",
+    "date": "2012/09/04 06:00"
+  },
+  {
+    "nctId": "NCT03128515",
+    "paper_title": "John CC, Opoka RO, Latham TS, Hume HA, Nabaggala C, Kasirye P, Ndugwa CM, Lane A, Ware RE. Hydroxyurea Dose Escalation for Sickle Cell Anemia in Sub-Saharan Africa. N Engl J Med. 2020 Jun 25;382(26):2524-2533. doi: 10.1056/NEJMoa2000146.",
+    "pmid": "32579813",
+    "ref_type": "DERIVED",
+    "primary_completion_date": "2019-04-07",
+    "study_completion_date": "2020-01-28",
+    "journal_name": "The New England journal of medicine",
+    "date": "2020/06/25 06:00"
+  },
+  {
+    "nctId": "NCT04203550",
+    "paper_title": "Raj R, Tommiska P, Koivisto T, Leinonen V, Danner N, Posti JP, Laukka D, Luoto T, Rauhala M, Tetri S, Korhonen TK, Satopaa J, Kivisaari R, Luostarinen T, Schwartz C, Czuba T, Taimela S, Lonnrot K, Jarvinen TLN; Finnish study of intraoperative irrigation versus drain alone after evacuation of CSDH (FINISH) study group. Burr-hole drainage with or without irrigation for chronic subdural haematoma (FINISH): a Finnish, nationwide, parallel-group, multicentre, randomised, controlled, non-inferiority trial. Lancet. 2024 Jun 29;403(10446):2798-2806. doi: 10.1016/S0140-6736(24)00686-X. Epub 2024 Jun 6.",
+    "pmid": "38852600",
+    "ref_type": "DERIVED",
+    "primary_completion_date": "2023-02-14",
+    "study_completion_date": "2023-02-14",
+    "journal_name": "Lancet (London, England)",
+    "date": "2024/06/10 00:42"
+  },
+  {
+    "nctId": "NCT01857310",
+    "paper_title": "Schisterman EF, Sjaarda LA, Clemons T, Carrell DT, Perkins NJ, Johnstone E, Lamb D, Chaney K, Van Voorhis BJ, Ryan G, Summers K, Hotaling J, Robins J, Mills JL, Mendola P, Chen Z, DeVilbiss EA, Peterson CM, Mumford SL. Effect of Folic Acid and Zinc Supplementation in Men on Semen Quality and Live Birth Among Couples Undergoing Infertility Treatment: A Randomized Clinical Trial. JAMA. 2020 Jan 7;323(1):35-48. doi: 10.1001/jama.2019.18714.",
+    "pmid": "31910279",
+    "ref_type": "DERIVED",
+    "primary_completion_date": "2019-06",
+    "study_completion_date": "2019-06",
+    "journal_name": "JAMA",
+    "date": "2020/01/08 06:00"
+  },
+  {
+    "nctId": "NCT04486508",
+    "paper_title": "INSPIRATION-S Investigators. Atorvastatin versus placebo in patients with covid-19 in intensive care: randomized controlled trial. BMJ. 2022 Jan 7;376:e068407. doi: 10.1136/bmj-2021-068407.",
+    "pmid": "34996756",
+    "ref_type": "DERIVED",
+    "primary_completion_date": "2021-04-04",
+    "study_completion_date": "2021-07-05",
+    "journal_name": "BMJ (Clinical research ed.)",
+    "date": "2022/01/09 06:00"
+  }
+]

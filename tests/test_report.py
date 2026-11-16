@@ -44,7 +44,7 @@ def test_write_bookkeeping_rows(tmp_path):
 
 def test_bookkeeping_writer_appends_incrementally(tmp_path):
     with BookkeepingWriter(tmp_path) as bk:
-        assert bk.path.read_text().strip() == "title,doi,url,status,n_downloaded,n_rejected,downloaded_paths,download_cost_usd,download_tokens,verify_tokens,verify_cost_usd,total_cost_usd,note"
+        assert bk.path.read_text().strip() == "title,doi,url,status,n_downloaded,n_preexisting,n_rejected,downloaded_paths,download_cost_usd,download_tokens,verify_tokens,verify_cost_usd,total_cost_usd,note"
 
         bk.write(_downloaded_result())
         assert len(bk.path.read_text().strip().splitlines()) == 2
@@ -54,6 +54,29 @@ def test_bookkeeping_writer_appends_incrementally(tmp_path):
 
     rows = list(csv.DictReader(bk.path.open()))
     assert [r["status"] for r in rows] == ["protocol", "skipped"]
+
+
+def test_preexisting_file_is_not_reported_as_a_download(tmp_path):
+    """A failed agent run over a file left by an earlier run must not read as
+    `protocol` — that is how a stale July PDF got counted as an August download."""
+    stale = "downloads/nejm/10.1056_NEJMoa1110823/nejmoa1110823_protocol.pdf"
+    result = PipelineResult(
+        article_url="https://doi.org/10.1056/NEJMoa1110823",
+        doi="10.1056/NEJMoa1110823",
+        downloaded_paths=[stale],
+        preexisting_paths=[stale],
+        error="agent stopped without finishing",
+        download_tokens=0,
+    )
+    row = list(csv.DictReader(write_bookkeeping([result], tmp_path).open()))[0]
+    assert row["status"] == "protocol_preexisting"
+    assert row["n_preexisting"] == "1"
+    assert "agent stopped" in row["note"]
+
+    # one fresh file among the pre-existing ones is still a real download
+    result.downloaded_paths = [stale, "downloads/nejm/x/fresh.pdf"]
+    row = list(csv.DictReader(write_bookkeeping([result], tmp_path).open()))[0]
+    assert row["status"] == "protocol"
 
 
 def test_cost_columns(tmp_path):
